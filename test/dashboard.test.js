@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { app } = require('../server.js');
 const {
   CONFIG, SCHEMA_VERSION, isUsablePrice, validateProduct, observeField,
-  detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory,
+  detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory, deriveIncidents,
 } = require('../server.js');
 
 const HEALTHY_PRODUCT = {

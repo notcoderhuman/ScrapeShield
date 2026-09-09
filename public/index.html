@@ -11,7 +11,7 @@
   <main class="console-shell">
     <header class="app-header">
       <a class="brand" href="/" aria-label="ScrapeShield home"><span class="brand-mark">S</span><span><strong>ScrapeShield</strong><small>reliability console</small></span></a>
-      <div class="header-right"><div class="collector-meta"><span class="live-dot" aria-hidden="true"></span><span>COLLECTOR</span><code id="collector-id">Loading…</code></div><button id="refresh-button" class="refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh demo</button></div>
+      <div class="header-right"><div class="collector-meta"><span class="live-dot" aria-hidden="true"></span><span>COLLECTOR</span><code id="collector-id">Loading…</code></div><button id="refresh-button" class="refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
     </header>
     <section class="status-strip" aria-label="Dashboard connection status"><span class="signal-dot" aria-hidden="true"></span><strong id="connection-label">SAFE LANDING</strong><span class="slash">/</span><span id="checked-at">No live run requested yet.</span></section>
     <section class="source-row" aria-label="Data source controls">
@@ -25,6 +25,8 @@
     </section>
 
     <section class="ops-grid" aria-label="Operational summary"><div class="section-heading"><div><p class="eyebrow">OPERATIONAL SUMMARY</p><h2>Reliability at a glance</h2></div><span class="data-badge">PERSISTED DATA</span></div><div class="ops-cards"><div><span>LAST RUN</span><strong id="op-last-run">—</strong></div><div><span>CURRENT HEALTH</span><strong id="op-health">—</strong></div><div><span>RECOVERIES</span><strong id="op-recoveries">—</strong></div><div><span>DEGRADED STREAK</span><strong id="op-degraded">—</strong></div></div></section>
+
+    <section class="panel incident-panel" aria-labelledby="incident-heading"><div class="section-heading"><div><p class="eyebrow">DERIVED RELIABILITY EVIDENCE</p><h2 id="incident-heading">Incidents</h2></div><span class="data-badge">OBSERVED</span></div><div id="incident-list" class="incident-list"></div></section>
 
     <div class="dashboard-grid two-column">
       <section class="panel risk-panel" aria-labelledby="risk-heading"><div class="section-heading"><div><p class="eyebrow">LIVE SIGNAL</p><h2 id="risk-heading">Fields at risk</h2></div><span id="risk-count" class="count-badge">—</span></div><div id="risk-list" class="risk-list"></div></section>

@@ -121,6 +121,65 @@ function detectRecovery(history, status, timestamp, previousRun = previousLiveRu
   }
   return null;
 }
+function incidentSignature(run, affectedFields) {
+  return affectedFields.map((field) => {
+    const observation = (run.fieldObservations || []).find((item) => item.field === field);
+    const driftTypes = (run.drift || []).filter((item) => item.field === field).map((item) => item.type).sort().join('|');
+    return `${field}:${observation?.status || 'unknown'}:${observation?.reason || ''}:${driftTypes}`;
+  }).join('||');
+}
+function deriveIncidents(runHistory = [], existingRecoveryEvents = []) {
+  const incidents = [];
+  let active = null;
+  const closeIncident = (recoveredAt = null, recoveryEvidence = []) => {
+    if (!active) return;
+    active.recoveredAt = recoveredAt;
+    active.recoveryEvidence = recoveryEvidence;
+    active.status = recoveredAt ? 'RECOVERED' : (active.status === 'RECURRING' ? 'RECURRING' : 'OPEN');
+    active.durationMs = recoveredAt ? Math.max(0, new Date(recoveredAt) - new Date(active.openedAt)) : null;
+    incidents.push(active);
+    active = null;
+  };
+  runHistory.forEach((run) => {
+    const observations = Array.isArray(run.fieldObservations) ? run.fieldObservations : [];
+    const affected = observations.filter((field) => !field.usable);
+    if (!affected.length) {
+      if (active && observations.length) {
+        const recovered = active.affectedFields.map((field) => observations.find((item) => item.field === field)).filter((item) => item?.usable);
+        if (recovered.length === active.affectedFields.length) closeIncident(run.timestamp, recovered);
+      }
+      return;
+    }
+    const fields = affected.map((field) => field.field).sort();
+    const signature = incidentSignature(run, fields);
+    if (active && active.signature === signature) {
+      active.lastAffectedAt = run.timestamp;
+      active.affectedRunCount += 1;
+      active.evidence.push({ runId: run.runId, timestamp: run.timestamp, fields: affected });
+      return;
+    }
+    if (active) closeIncident();
+    const prior = incidents.filter((incident) => incident.affectedFields.join('|') === fields.join('|') && incident.status === 'RECOVERED').length;
+    active = {
+      id: `incident-${run.runId}`,
+      status: prior ? 'RECURRING' : 'OPEN',
+      affectedFields: fields,
+      openedAt: run.timestamp,
+      lastAffectedAt: run.timestamp,
+      recoveredAt: null,
+      affectedRunCount: 1,
+      durationMs: null,
+      recurrenceCount: prior + 1,
+      evidence: [{ runId: run.runId, timestamp: run.timestamp, fields: affected }],
+      recoveryEvidence: [],
+      externalRepairObserved: false,
+      recurrenceKey: fields.join('|'),
+      signature,
+    };
+  });
+  if (active) closeIncident();
+  return incidents.map(({ signature, recurrenceKey, ...incident }) => incident);
+}
 function summarizeHistory(history) {
   const runs = history.runs;
   const successful = runs.filter((run) => run.status === 'healthy');
@@ -177,7 +236,7 @@ async function runCollector() {
   if (!product || typeof product !== 'object' || Array.isArray(product)) throw new Error('Bright Data CLI returned no usable product result.');
   return product;
 }
-function responseData(history, extra = {}) { return { history: history.events, runHistory: history.runs, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), collectorId: CONFIG.collectorId, ...extra }; }
+function responseData(history, extra = {}) { return { history: history.events, runHistory: history.runs, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), incidents: deriveIncidents(history.runs, history.events), collectorId: CONFIG.collectorId, ...extra }; }
 
 app.get('/api/dashboard', async (req, res) => {
   const demoMode = typeof req.query.demo === 'string' ? req.query.demo : null; const timestamp = new Date().toISOString();
@@ -206,4 +265,4 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 if (require.main === module) app.listen(PORT, () => console.log(`ScrapeShield is running at http://localhost:${PORT}`));
-module.exports = { app, CONFIG, SCHEMA_VERSION, isUsable, isUsablePrice, isFieldUsable, observeField, observeProduct, validateProduct, detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory };
+module.exports = { app, CONFIG, SCHEMA_VERSION, isUsable, isUsablePrice, isFieldUsable, observeField, observeProduct, validateProduct, detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory, deriveIncidents };
