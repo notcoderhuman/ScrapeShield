@@ -24,21 +24,24 @@ function createDom() {
     set innerHTML(value) { this.textContent = value; }
   }
   const selectors = new Map();
-  const ids = ['refresh-button','collector-id','checked-at','connection-label','health-panel','health-heading','health-icon','health-summary','health-score','score-fill','hero-usable','hero-risk','hero-last-success','hero-failures','op-last-run','op-health','op-recoveries','op-degraded','risk-count','risk-list','drift-list','field-list','diagnosis-status','diagnosis-list','image-frame','product-image','product-name','product-price','product-description','product-rating','payload-source','run-history','trend-view','field-history','history-list','timeline-list','demo-indicator','demo-indicator-text'];
+  const ids = ['refresh-button','run-live-button','collector-id','checked-at','connection-label','health-panel','health-heading','health-icon','health-summary','health-score','score-fill','hero-usable','hero-risk','hero-last-success','hero-failures','op-last-run','op-health','op-recoveries','op-degraded','risk-count','risk-list','drift-list','field-list','diagnosis-status','diagnosis-list','image-frame','product-image','product-name','product-price','product-description','product-rating','payload-source','run-history','trend-view','field-history','history-list','timeline-list','demo-indicator','demo-indicator-text'];
   ids.forEach((id) => selectors.set(`#${id}`, new Element(id === 'product-image' ? 'img' : 'div', id)));
   selectors.set('.console-shell', new Element('main'));
   const buttons = ['live','healthy','degraded','failed'].map((mode) => { const button = new Element('button'); button.dataset.mode = mode; return button; });
   const document = { querySelector: (selector) => selectors.get(selector) || null, querySelectorAll: (selector) => selector === '.demo-btn' ? buttons : [], createElement: (tag) => new Element(tag), createElementNS: (namespace, tag) => new Element(tag), createTextNode: (text) => { const item = new Element('text'); item.textContent = String(text); return item; } };
   selectors.get('#refresh-button').addEventListener = () => {};
+  selectors.get('#run-live-button').addEventListener = () => {};
   selectors.get('#product-image').addEventListener = () => {};
   return { document, selectors };
 }
 
 async function executeApp(response) {
   const { document, selectors } = createDom();
-  const context = { document, window: { location: { search: '?demo=' + response.demo, pathname: '/' }, history: { replaceState() {} } }, URLSearchParams, Set, Date, fetch: async () => ({ ok: true, json: async () => response }), console, Object, String, Array, Math, Number, Error, Promise, undefined };
+  const fetchCalls = [];
+  const context = { document, window: { location: { search: response.demo ? '?demo=' + response.demo : '', pathname: '/' }, history: { replaceState() {} } }, URLSearchParams, Set, Date, fetch: async (url) => { fetchCalls.push(url); return { ok: true, json: async () => response }; }, console, Object, String, Array, Math, Number, Error, Promise, undefined, setImmediate };
   vm.runInNewContext(app, context);
   await new Promise((resolve) => setImmediate(resolve));
+  selectors.fetchCalls = fetchCalls;
   return selectors;
 }
 
@@ -51,6 +54,7 @@ function demoResponse(status) {
 
 test('dashboard contains live and all read-only demo controls', () => { for (const mode of ['live', 'healthy', 'degraded', 'failed']) assert.match(html, new RegExp(`data-mode="${mode}"`)); assert.match(app, /no live history modified/); });
 test('dashboard consumes current reliability API fields', () => { for (const field of ['latestRun', 'runHistorySummary', 'fieldDiagnostics', 'drift', 'runHistory', 'recoveryEvent']) assert.match(app, new RegExp(field)); });
+test('live mode requires explicit collector action and safe landing defaults to healthy demo', () => { assert.match(app, /return DEMO_MODES\.has\(value\) \? value : 'healthy'/); assert.match(app, /if \(mode === 'live'\)/); assert.match(app, /async function loadDashboardLive\(\)/); assert.match(app, /fetch\('\/api\/dashboard'\)/); assert.match(app, /elements\.refresh\.hidden = !demo/); });
 test('dashboard renders risk, drift, history, recovery, and trend empty states', () => { for (const phrase of ['Fields at risk', 'What changed', 'Run history', 'Recovery history', 'Health trend']) assert.match(html, new RegExp(phrase, 'i')); for (const phrase of ['No structured output changes detected', 'Run history will appear', 'Field history will appear']) assert.match(app, new RegExp(phrase)); });
 test('responsive dashboard prevents horizontal overflow and supports narrow layouts', () => { assert.match(css, /@media\(max-width:560px\)/); assert.match(css, /@media\(max-width:340px\)/); assert.match(css, /box-sizing:border-box/); });
 test('dashboard uses accessible landmarks and status semantics', () => { assert.match(html, /<main/); assert.match(html, /aria-label="Health score"/); assert.match(html, /role="status"/); assert.match(css, /:focus-visible/); });
