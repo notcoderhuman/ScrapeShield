@@ -1,188 +1,256 @@
 # ScrapeShield
 
-> Self-healing web intelligence — a reliability layer for a Bright Data Scraper Studio collector.
+> Reliability and observability for structured data collectors.
 
-ScrapeShield is a lightweight web-data reliability dashboard built around a custom Bright Data Scraper Studio collector. It runs the collector, validates the structured data that comes back, scores extraction health, and makes scraper failures and recoveries visible — so you can trust the data your pipeline depends on.
+ScrapeShield monitors and verifies structured product data collected by a Bright Data Scraper Studio collector. It validates each result, identifies field-level failures, detects structured-output drift, records live run history, derives incidents and recurrence, verifies recovery, and ranks field reliability. Bright Data performs the collection and its external scraper self-healing; ScrapeShield observes and verifies the resulting data.
 
-## Problem
+## What ScrapeShield does
 
-Websites change constantly. A scraper that works today can silently start returning incomplete or malformed data tomorrow when the target page structure changes — a missing price, an empty title, a broken image URL. These failures are easy to miss and expensive to debug, because the scraper still "runs" and still returns *something*.
+ScrapeShield provides a small reliability layer around an existing collector:
 
-## Solution
+- Classifies runs as `HEALTHY`, `DEGRADED`, or `FAILED`.
+- Validates required fields and records field-level diagnostics.
+- Detects structured-output drift such as field removal, type changes, shape changes, and usability changes.
+- Persists append-only history for explicit live collector runs.
+- Derives evidence-based incidents, recovery, and recurrence from run history.
+- Verifies recovery only when affected fields are later observed usable.
+- Calculates field reliability from explicit live field observations.
+- Provides read-only fixtures for healthy, degraded, and failed states.
+- Keeps demo fixture state separate from persisted live telemetry.
 
-ScrapeShield adds a reliability layer around an existing Bright Data collector. It:
+## What ScrapeShield does not do
 
-1. Runs the existing Bright Data Scraper Studio collector.
-2. Receives the structured product JSON.
-3. Validates every required field.
-4. Calculates an extraction health score (`HEALTHY` / `DEGRADED` / `FAILED`).
-5. Identifies exactly which fields are missing or invalid.
-6. Records **real** recovery events when a previously unhealthy collector returns to full health.
-7. Verifies the result after a Bright Data Self-Healing repair.
-
-> ScrapeShield **monitors and verifies**. Bright Data Scraper Studio performs the actual scraper self-healing.
+ScrapeShield is not a scraper, crawler, browser automation tool, proxy system, anti-bot system, selector engine, or Scrapling integration. It does not infer unsupported root causes such as selector changes, website redesigns, anti-bot behavior, or API changes. It does not perform Bright Data Self-Healing. Bright Data owns collection and external collector repair.
 
 ## Architecture
 
-ScrapeShield monitors and verifies the output of a Bright Data Scraper Studio collector.
+```text
+Bright Data collector
+  → structured product output
+  → ScrapeShield validation
+  → field diagnostics
+  → structured-output drift detection
+  → append-only live run history
+  → derived incidents and recurrence
+  → recovery verification
+  → field reliability ranking
+  → observability dashboard
+```
 
 ![ScrapeShield Architecture](docs/scrapeshield-architecture.png)
-```
 
-The stack is deliberately small: an Express server (`server.js`), a static single-page dashboard (`public/`), and two JSON data files (`data/`). There is no build step and no frontend framework.
+The implementation is deliberately small: an Express server (`server.js`), a static HTML/CSS/JavaScript dashboard (`public/`), and JSON-backed local data (`data/`). There is no frontend build step or frontend framework.
 
-## Bright Data Scraper Studio usage
+## Core reliability model
 
-ScrapeShield does not scrape pages itself. It shells out to an existing, already-configured Bright Data collector through the Bright Data CLI (`bdata`):
+The monitored product contract currently contains five required fields:
 
-```bash
-bdata scraper run <collector_id> <product_url> --pretty
-```
-
-- The collector ID is configured in `server.js` (`CONFIG.collectorId`) and can be overridden with the `BRIGHT_DATA_COLLECTOR_ID` environment variable.
-- Credentials never touch this project — they live in the Bright Data CLI's own local login store. ScrapeShield never logs or returns raw CLI output, so account details can't leak into API responses.
-- The collector ID is format-validated before use, and CLI output is parsed defensively (tolerant of surrounding progress text, without `eval`).
-
-> **Prerequisite for live mode:** the Bright Data CLI must be installed and logged in on the machine running the server. If it isn't, live mode reports a `FAILED` state (by design) and you can still explore every other state using Demo Mode (below).
-
-## Self-healing workflow
-
-ScrapeShield observes and verifies the self-healing loop; Bright Data performs the repair:
-
-1. **Scrape completed** — the collector returns a payload.
-2. **Failure detected** — ScrapeShield validation flags missing/invalid fields (`DEGRADED`) or a failed run (`FAILED`).
-3. **Bright Data Self-Healing** — Bright Data repairs the collector. *External step — not performed or claimed by this dashboard.*
-4. **Repair approved** — *external approval step.*
-5. **Recovery verified** — when a later live run comes back fully valid after an unhealthy one, ScrapeShield records a **real** recovery event noting exactly which fields were restored.
-
-Recovery events are only ever recorded from real live runs. A recovery that follows a `DEGRADED` state lists the exact fields that were missing; a recovery that follows a hard `FAILED` run makes no per-field claim, because a failed run carries no field-level detail. **Demo Mode never creates or alters recovery history.**
-
-## Required fields
-
-A run is `HEALTHY` only when all five required fields carry usable values:
-
-| Field | Notes |
+| Field | Validation rule |
 | --- | --- |
 | `product_name` | Non-empty string |
-| `price` | Object `{ value, currency, symbol }` — only valid when `value` is present. A `{ "value": null }` price is treated as **invalid** |
+| `price` | Usable scalar or object with a usable `value` |
 | `description` | Non-empty string |
-| `rating` | Non-empty value |
+| `rating` | Number or non-empty string |
 | `primary_image_url` | Non-empty string |
 
-If one or more fields are unusable, the run is `DEGRADED` and those fields are listed. If the collector run itself cannot complete, the run is `FAILED`.
+A run is `HEALTHY` when every required field is usable. A run is `DEGRADED` when the collector returns a product but one or more required fields are unusable. A run is `FAILED` when the collector execution does not produce a usable product result.
 
-## Example structured output
+Field observations distinguish evidence such as `healthy`, `missing`, `null`, `empty`, `invalid`, and `unexpected-type`. A collector failure with no field observations does not become evidence that every field failed.
 
-A healthy collector response looks like this:
+## Incidents and recovery
 
-```json
-{
-  "product_name": "Aurora Wireless Headphones",
-  "price": { "value": 142.75, "currency": "USD", "symbol": "$" },
-  "description": "Over-ear wireless headphones with 40 mm drivers, 32 hours of battery, and memory-foam cups.",
-  "rating": 4.6,
-  "primary_image_url": "https://example.com/images/aurora.jpg"
-}
+Incidents are derived from live run evidence; they are not stored as a separate history record.
+
+```text
+OPEN
+  → affected field evidence persists
+  → RECOVERED when affected fields are observed usable
 ```
 
-The dashboard API (`/api/dashboard`) wraps that in reliability metadata:
+A later occurrence after recovery becomes a separate `RECURRING` incident. Multi-field incidents retain all affected fields. Failed runs without field observations do not create field-specific incidents.
 
-```json
-{
-  "status": "healthy",
-  "product": { "product_name": "Aurora Wireless Headphones", "price": { "value": 142.75, "currency": "USD", "symbol": "$" }, "description": "…", "rating": 4.6, "primary_image_url": "https://…" },
-  "missingFields": [],
-  "recoveryEvent": null,
-  "history": [],
-  "collectorId": "c_xxxxxxxxxxxx",
-  "checkedAt": "2026-08-23T12:00:00.000Z"
-}
+Recovery is evidence-based. A healthy overall status does not prove that a particular field recovered unless that field is explicitly observed usable in the later run. External Bright Data repair is shown only as workflow context and is never claimed as completed by ScrapeShield.
+
+## Field reliability
+
+Field reliability is derived from explicit live field observations:
+
+```text
+usable explicit field observations
+---------------------------------- × 100
+all explicit field observations
 ```
+
+Failed runs without field observations, absent field entries, legacy recovery events, and demo fixtures do not contribute. Reliability is suppressed until a field has at least three observations. Sparse fields display `Insufficient live evidence` while retaining their observed and degraded counts. Results are deterministically ranked by sufficient evidence, lowest reliability, highest degraded count, and field name.
 
 ## Demo modes
 
-Demo Mode lets anyone explore every dashboard state without a live Bright Data run — ideal for reviewers who don't have the CLI configured. Use the **Data Source** control at the top of the dashboard (`Live` / `Healthy` / `Degraded` / `Failed`), or drive it directly via the query string:
+The default route is a safe landing state:
 
-| Mode | URL | What it shows |
+```text
+/                       → healthy demo landing; no Bright Data invocation
+```
+
+The read-only fixtures are:
+
+| Mode | URL | Behavior |
 | --- | --- | --- |
-| Live | `/` | Real collector run (requires the Bright Data CLI) |
-| Healthy | `/?demo=healthy` | Fully valid fixture data |
-| Degraded | `/?demo=degraded` | Fixture data with the price removed (one missing field) |
-| Failed | `/?demo=failed` | A simulated collector failure |
+| Healthy | `/?demo=healthy` | Fully valid fixture product |
+| Degraded | `/?demo=degraded` | Fixture product with an unusable price |
+| Failed | `/?demo=failed` | Simulated collector failure |
 
-**Demo Mode is read-only.** It is computed entirely from local fixture data (`data/demo-product.json`), never runs the collector, never fabricates recovery events, and never modifies `data/healing-history.json`. A banner makes it obvious when Demo Mode is active.
+Demo modes never invoke the collector, never create live run history, never create recovery history, and never use persisted live telemetry as fixture evidence. Demo field reliability remains insufficient rather than presenting fabricated historical percentages.
+
+## Live mode
+
+Selecting `LIVE` is non-executing. The operator must click **Run live collector**. That explicit action invokes the Bright Data-backed `/api/dashboard` route, validates the returned product, and appends the resulting run to `data/healing-history.json`.
+
+Live history is append-only. Live mode is intended for trusted/local operation; see [Security and deployment](#security-and-deployment).
+
+## Dashboard
+
+The dashboard exposes current health, fields at risk, field diagnostics, structured-output drift, incidents, field reliability, run history, trend, field history, recovery history, and the incident timeline. The repository currently includes the architecture diagram above but no dedicated dashboard screenshot asset. A polished screenshot is a remaining presentation improvement if the project is published for portfolio review.
+
+## Requirements
+
+- Node.js 18 or newer.
+- npm.
+- Bright Data CLI (`bdata`) installed and authenticated for live mode only.
+
+Demo mode requires only Node.js and the repository files.
 
 ## Installation
 
-Requirements: Node.js 18+.
-
 ```bash
-git clone <your-repo-url>
-cd scrapeshield
-npm install
+git clone <repository-url>
+cd ScrapeShield
+npm ci
 ```
 
-For **live mode only**, also install and log in to the Bright Data CLI so that `bdata` is on your `PATH`. Demo modes need nothing beyond Node.
+Use the repository URL for the copy you are reviewing; this README intentionally does not invent one.
 
-## Running locally
+## Bright Data configuration
 
-```bash
-npm start
-```
+For live mode, install and authenticate the Bright Data CLI so `bdata` is available on `PATH`. ScrapeShield invokes the configured collector with the configured product URL. The collector ID can be overridden through the environment; credentials remain in the Bright Data CLI's local credential store and are not committed to this repository.
 
-Then open <http://localhost:3000>.
+Current configuration defaults are defined in `server.js`:
 
-Optional environment variables:
+| Setting | Environment variable | Default |
+| --- | --- | --- |
+| HTTP port | `PORT` | `3000` |
+| Bright Data collector | `BRIGHT_DATA_COLLECTOR_ID` | Project collector ID in `server.js` |
+| Product URL | Not configurable through environment | Project product URL in `server.js` |
+| History file | Not configurable through environment | `data/healing-history.json` |
+
+Example:
 
 ```bash
 PORT=4000 BRIGHT_DATA_COLLECTOR_ID=c_yourcollector npm start
 ```
 
-To open straight into a demo view (no CLI required):
+On Windows PowerShell:
+
+```powershell
+$env:PORT = "4000"
+$env:BRIGHT_DATA_COLLECTOR_ID = "c_yourcollector"
+npm start
+```
+
+## Running the app
+
+```bash
+npm start
+```
+
+Open <http://localhost:3000>.
+
+For a deterministic fixture view, open:
 
 ```text
 http://localhost:3000/?demo=degraded
 ```
 
-## Testing
-
-Syntax-check the server:
-
-```bash
-node --check server.js
-```
-
-Run the unit tests. They require no network or external services — they exercise field validation, the price-value check, and recovery reporting against the real functions exported from `server.js`:
+## Running tests
 
 ```bash
 npm test
+npm run test:browser
+node --check server.js
+node --check public/app.js
 ```
 
-Manual smoke test of the API:
+`npm test` runs backend, derivation, history, incident, field reliability, API, and isolation tests. `npm run test:browser` runs lightweight VM-based dashboard contract and rendering tests against the actual frontend script. These are not Playwright or full-browser E2E tests. The syntax checks validate the server and frontend JavaScript independently.
 
-```bash
-npm start
-# in another terminal:
-curl "http://localhost:3000/api/dashboard?demo=healthy"
-curl "http://localhost:3000/api/dashboard?demo=degraded"
-curl "http://localhost:3000/api/dashboard?demo=failed"
+The tests use temporary history fixtures where persistence behavior is required. They must not write test data into `data/healing-history.json`.
+
+## API overview
+
+The dashboard endpoint is:
+
+```text
+GET /api/dashboard
+GET /api/dashboard?demo=healthy|degraded|failed
 ```
 
-`data/healing-history.json` should be byte-for-byte unchanged after any number of demo requests — that isolation is part of what the tests and manual checks confirm.
+Important response fields:
 
-## AI-assisted development disclosure
-
-This project was developed with AI assistance. An AI coding assistant (Anthropic's Claude) was used for code review, debugging, documentation, and implementation support. All AI-suggested changes were directed, reviewed, and verified by the human author(s). The Bright Data collector itself was created and configured by the team, not generated by AI, and no product data or recovery events were fabricated by the assistant — demo data is clearly labeled fixture data and is isolated from real recovery history.
-
-## Team contributions
-
-<!-- Replace the placeholders below with your real names and a short summary of what each person did. -->
-
-| Member | Contributions |
+| Field | Meaning |
 | --- | --- |
-| _Ayush Vij_ | Bright Data collector setup, backend (`server.js`), field validation & recovery logic |
-| _Namandeep Singh Taunk_ | Dashboard UI (HTML/CSS/JS), demo modes, documentation |
+| `status` | Current `healthy`, `degraded`, or `failed` state |
+| `product` | Latest structured product payload, when available |
+| `missingFields` | Required fields currently unusable |
+| `fieldDiagnostics` | Current field observations and reasons |
+| `drift` | Structured-output changes detected for the current run |
+| `recoveryEvent` | Recovery event associated with the current live run, when any |
+| `runHistory` | Persisted live runs; empty for demo fixtures |
+| `latestRun` | Latest persisted live run, when any |
+| `runHistorySummary` | Derived counts, streaks, and per-field degradation/recovery counts |
+| `incidents` | Derived incident lifecycle and recurrence records |
+| `fieldReliability` | Derived per-field reliability entries from explicit live observations |
+| `demo` | Demo mode identifier when serving a fixture |
+| `collectorId` | Configured collector identifier |
+| `checkedAt` | Response check timestamp |
+
+The API preserves legacy history compatibility and does not persist derived incidents or field reliability separately.
+
+## Data and history model
+
+`data/healing-history.json` contains append-only live run history and legacy recovery events. `normalizeHistory()` preserves event-only legacy files and supplies an empty run list when no run-level evidence exists. Derived incidents and field reliability are calculated from available run evidence at response time.
+
+`data/demo-product.json` is a local healthy fixture. Demo requests are read-only and must leave production history unchanged.
+
+## Security and deployment
+
+ScrapeShield is currently designed as a local operator console. The live collector trigger is not authenticated, so the application should not be exposed directly to an untrusted network without additional access controls.
+
+Supply configuration through environment variables or the Bright Data CLI's local credential mechanism rather than committing secrets. Do not commit `.env` files, credentials, or collector authentication material. The live route can trigger a real collector run and mutate local history; use it only from a trusted operator environment.
+
+See [SECURITY.md](SECURITY.md) for reporting and deployment guidance.
+
+## Limitations
+
+- Live execution currently assumes trusted/local use and has no authenticated remote operator access.
+- Legacy event-only history cannot reconstruct historical field reliability.
+- Field reliability requires sufficient explicit live observations.
+- ScrapeShield does not infer website or root causes.
+- The current browser tests are VM-based contract tests, not full browser automation.
+- The project does not currently provide a hosted service, account system, or autonomous repair system.
+
+## Project status
+
+ScrapeShield is a portfolio / hackathon-ready reliability and observability project. It demonstrates backend integration, structured validation, drift detection, append-only history, incident handling, recovery verification, field reliability analysis, safe demo design, and defensive testing. It is not presented as a production-hosted or remotely authenticated SaaS product.
 
 ## License
 
 Released under the MIT License. See [LICENSE](LICENSE).
+
+## Team
+
+| Member | Contributions |
+| --- | --- |
+| _Ayush Vij_ | Bright Data collector setup, backend, field validation, and recovery logic |
+| _Namandeep Singh Taunk_ | Dashboard UI, demo modes, and documentation |
+
+## AI-assisted development disclosure
+
+This project was developed with AI assistance. AI tools supported code review, debugging, documentation, and implementation support under human direction and review. The Bright Data collector was created and configured by the team. Demo data is explicitly labeled fixture data and is isolated from live recovery history.
