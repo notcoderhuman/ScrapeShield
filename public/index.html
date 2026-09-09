@@ -1,44 +1,56 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10141c" />
-    <title>ScrapeShield · Reliability Console</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <main class="console-shell">
-      <header class="app-header">
-        <a class="brand" href="/" aria-label="ScrapeShield dashboard"><span class="brand-mark" aria-hidden="true">S</span><span><strong>ScrapeShield</strong><small>reliability console</small></span></a>
-        <div class="header-tools"><div class="collector-meta"><span class="live-dot" aria-hidden="true"></span><span>Collector</span><code id="collector-id">Loading…</code></div><button id="refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
-      </header>
-      <section class="inspect-bar" aria-label="Live dashboard state"><span class="signal-dot" aria-hidden="true"></span><span>LIVE DASHBOARD RESPONSE</span><span class="inspect-separator">/</span><span id="checked-at">Connecting to the collector…</span></section>
-      <section class="demo-bar" aria-label="Data source and demo mode controls">
-        <div class="demo-switch" role="group" aria-label="Select dashboard data source">
-          <span class="demo-switch-label">DATA SOURCE</span>
-          <button type="button" class="demo-btn" data-mode="live" aria-pressed="true">Live</button>
-          <button type="button" class="demo-btn" data-mode="healthy" aria-pressed="false">Healthy</button>
-          <button type="button" class="demo-btn" data-mode="degraded" aria-pressed="false">Degraded</button>
-          <button type="button" class="demo-btn" data-mode="failed" aria-pressed="false">Failed</button>
-        </div>
-        <p id="demo-indicator" class="demo-indicator" role="status" hidden><span class="demo-indicator-dot" aria-hidden="true"></span><span id="demo-indicator-text"></span></p>
-      </section>
-      <section id="health-panel" class="panel health-panel loading" aria-labelledby="health-heading">
-        <div class="health-primary"><p class="section-kicker">EXTRACTION HEALTH</p><div class="health-title-row"><span id="health-icon" class="health-icon" aria-hidden="true">•</span><h1 id="health-heading">Checking…</h1></div><p id="health-summary" class="health-summary">Fetching the latest collector result.</p><div class="score-line"><span>Health score</span><strong id="health-score">—<small>/100</small></strong></div><div class="score-track" role="progressbar" aria-label="Health score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="score-fill"></span></div></div>
-        <div class="metric-grid" aria-label="Live extraction metrics"><article class="metric-card"><span>MONITORED FIELDS</span><strong>5</strong><small>required by this collector</small></article><article class="metric-card"><span>USABLE FIELDS</span><strong id="metric-usable">—</strong><small>from the latest response</small></article><article class="metric-card"><span>MISSING FIELDS</span><strong id="metric-missing">—</strong><small>reported by validation</small></article><article class="metric-card"><span>RECOVERIES OBSERVED</span><strong id="metric-recoveries">—</strong><small>recorded locally</small></article></div>
-      </section>
-      <section class="dashboard-grid upper-grid">
-        <section class="panel product-panel" aria-labelledby="product-heading"><div class="panel-heading"><div><p class="section-kicker">LATEST STRUCTURED OUTPUT</p><h2 id="product-heading">Product Data</h2></div><span class="source-chip">LIVE COLLECTOR</span></div><div class="product-layout"><div id="image-frame" class="image-frame image-unavailable"><img id="product-image" alt="" /><div class="image-fallback"><span aria-hidden="true">◫</span><span>Image unavailable</span></div></div><div class="product-copy"><h3 id="product-name">Waiting for product data…</h3><p id="product-price" class="price">—</p><p id="product-description" class="product-description">The latest structured result will appear here.</p><dl class="product-details"><div><dt>Rating</dt><dd id="product-rating">—</dd></div><div><dt>Source URL</dt><dd><a href="https://shopalto.xyz/product/aurora-wireless-headphones" target="_blank" rel="noreferrer">shopalto.xyz product page</a></dd></div></dl></div></div></section>
-        <section class="panel field-panel" aria-labelledby="field-heading"><div class="panel-heading"><div><p class="section-kicker">VALIDATION LAYER</p><h2 id="field-heading">Field Health</h2></div><span class="count-chip">5 monitored</span></div><ul id="field-list" class="field-list"></ul></section>
-      </section>
-      <section id="diagnosis-panel" class="panel diagnosis-panel" aria-labelledby="diagnosis-heading"><div class="panel-heading"><div><p class="section-kicker">SCRAPESHIELD DETECTION</p><h2 id="diagnosis-heading">Failure Diagnosis</h2></div><span id="diagnosis-status" class="status-pill">CHECKING</span></div><p id="diagnosis-message">Waiting for validation results.</p><ul id="missing-fields" class="diagnosis-list"></ul></section>
-      <section class="dashboard-grid lower-grid">
-        <section class="panel timeline-panel" aria-labelledby="timeline-heading"><div class="panel-heading"><div><p class="section-kicker">OBSERVABILITY WORKFLOW</p><h2 id="timeline-heading">Self-Healing Timeline</h2></div></div><p class="timeline-note">ScrapeShield detects and verifies. Bright Data repair steps are workflow context, not completed actions unless supplied by the backend.</p><ol id="timeline-list" class="timeline-list"></ol></section>
-        <section class="panel history-panel" aria-labelledby="history-heading"><div class="panel-heading"><div><p class="section-kicker">BACKEND EVENT LOG</p><h2 id="history-heading">Recovery History</h2></div></div><p id="history-empty" class="empty-state">No recovery events have been recorded by the backend.</p><ul id="history-list" class="history-list"></ul></section>
-      </section>
-      <footer>ScrapeShield monitors collector output. Bright Data Scraper Studio performs any collector repair outside this dashboard.</footer>
-    </main>
-    <script src="/app.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>ScrapeShield · Reliability Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="console-shell">
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="ScrapeShield home"><span class="brand-mark">S</span><span><strong>ScrapeShield</strong><small>reliability console</small></span></a>
+      <div class="header-right"><div class="collector-meta"><span class="live-dot" aria-hidden="true"></span><span>COLLECTOR</span><code id="collector-id">Loading…</code></div><button id="refresh-button" class="refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh</button></div>
+    </header>
+    <section class="status-strip" aria-label="Dashboard connection status"><span class="signal-dot" aria-hidden="true"></span><strong id="connection-label">DASHBOARD RESPONSE</strong><span class="slash">/</span><span id="checked-at">Connecting…</span></section>
+    <section class="source-row" aria-label="Data source controls">
+      <div class="source-switch" role="group" aria-label="Select dashboard data source"><span class="switch-label">DATA SOURCE</span><button class="demo-btn active" data-mode="live" aria-pressed="true" type="button">LIVE</button><button class="demo-btn" data-mode="healthy" aria-pressed="false" type="button">HEALTHY</button><button class="demo-btn" data-mode="degraded" aria-pressed="false" type="button">DEGRADED</button><button class="demo-btn" data-mode="failed" aria-pressed="false" type="button">FAILED</button></div>
+      <p id="demo-indicator" class="demo-indicator" role="status" hidden><span class="demo-dot" aria-hidden="true"></span><span id="demo-indicator-text"></span></p>
+    </section>
+
+    <section id="health-panel" class="health-hero panel loading" aria-labelledby="health-heading">
+      <div class="hero-main"><p class="eyebrow">CURRENT HEALTH</p><div class="health-title"><span id="health-icon" class="health-icon" aria-hidden="true">•</span><h1 id="health-heading">Checking…</h1></div><p id="health-summary" class="hero-summary">Fetching the latest structured result.</p><div class="score-row"><span>Health score</span><strong id="health-score">—<small>/100</small></strong></div><div class="score-track" role="progressbar" aria-label="Health score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="score-fill"></span></div></div>
+      <div class="hero-signals" aria-label="Reliability summary"><div class="signal-card"><span>USABLE</span><strong id="hero-usable">—</strong><small>monitored fields</small></div><div class="signal-card"><span>AT RISK</span><strong id="hero-risk">—</strong><small>current fields</small></div><div class="signal-card"><span>LAST SUCCESS</span><strong id="hero-last-success">—</strong><small>recorded live run</small></div><div class="signal-card"><span>FAILURE STREAK</span><strong id="hero-failures">—</strong><small>consecutive runs</small></div></div>
+    </section>
+
+    <section class="ops-grid" aria-label="Operational summary"><div class="section-heading"><div><p class="eyebrow">OPERATIONAL SUMMARY</p><h2>Reliability at a glance</h2></div><span class="data-badge">PERSISTED DATA</span></div><div class="ops-cards"><div><span>LAST RUN</span><strong id="op-last-run">—</strong></div><div><span>CURRENT HEALTH</span><strong id="op-health">—</strong></div><div><span>RECOVERIES</span><strong id="op-recoveries">—</strong></div><div><span>DEGRADED STREAK</span><strong id="op-degraded">—</strong></div></div></section>
+
+    <div class="dashboard-grid two-column">
+      <section class="panel risk-panel" aria-labelledby="risk-heading"><div class="section-heading"><div><p class="eyebrow">LIVE SIGNAL</p><h2 id="risk-heading">Fields at risk</h2></div><span id="risk-count" class="count-badge">—</span></div><div id="risk-list" class="risk-list"></div></section>
+      <section class="panel drift-panel" aria-labelledby="drift-heading"><div class="section-heading"><div><p class="eyebrow">STRUCTURED OUTPUT</p><h2 id="drift-heading">What changed</h2></div><span class="data-badge">OBSERVED</span></div><div id="drift-list" class="drift-list"></div></section>
+    </div>
+
+    <div class="dashboard-grid two-column">
+      <section class="panel field-panel" aria-labelledby="field-heading"><div class="section-heading"><div><p class="eyebrow">VALIDATION LAYER</p><h2 id="field-heading">Field health</h2></div><span class="count-badge">5 monitored</span></div><div id="field-list" class="field-list"></div></section>
+      <section id="diagnosis-panel" class="panel diagnosis-panel" aria-labelledby="diagnosis-heading"><div class="section-heading"><div><p class="eyebrow">EVIDENCE</p><h2 id="diagnosis-heading">Failure diagnosis</h2></div><span id="diagnosis-status" class="status-pill">CHECKING</span></div><div id="diagnosis-list" class="diagnosis-list"></div></section>
+    </div>
+
+    <section class="panel output-panel" aria-labelledby="output-heading"><div class="section-heading"><div><p class="eyebrow">LATEST STRUCTURED OUTPUT</p><h2 id="output-heading">Product payload</h2></div><span id="payload-source" class="source-chip">LIVE</span></div><div class="product-layout"><div id="image-frame" class="image-frame image-unavailable"><img id="product-image" alt="" /><div class="image-fallback"><span aria-hidden="true">◫</span><span>Image unavailable</span></div></div><div class="product-copy"><h3 id="product-name">Waiting for product data…</h3><p id="product-price" class="price">—</p><p id="product-description" class="product-description">The latest structured result will appear here.</p><dl class="product-details"><div><dt>Rating</dt><dd id="product-rating">—</dd></div><div><dt>Source URL</dt><dd><a href="https://shopalto.xyz/product/aurora-wireless-headphones" target="_blank" rel="noreferrer">shopalto.xyz product page</a></dd></div></dl></div></div></section>
+
+    <div class="dashboard-grid two-column history-grid">
+      <section class="panel run-panel" aria-labelledby="run-heading"><div class="section-heading"><div><p class="eyebrow">APPEND-ONLY LOG</p><h2 id="run-heading">Run history</h2></div><span class="data-badge">LIVE RUNS</span></div><div id="run-history" class="run-history"></div></section>
+      <section class="panel trend-panel" aria-labelledby="trend-heading"><div class="section-heading"><div><p class="eyebrow">HEALTH OVER TIME</p><h2 id="trend-heading">Health trend</h2></div></div><div id="trend-view" class="trend-view"></div></section>
+    </div>
+
+    <div class="dashboard-grid two-column">
+      <section class="panel field-history-panel" aria-labelledby="field-history-heading"><div class="section-heading"><div><p class="eyebrow">FIELD RELIABILITY</p><h2 id="field-history-heading">Field history</h2></div></div><div id="field-history" class="field-history"></div></section>
+      <section class="panel recovery-panel" aria-labelledby="recovery-heading"><div class="section-heading"><div><p class="eyebrow">VERIFICATION LOG</p><h2 id="recovery-heading">Recovery history</h2></div></div><div id="history-list" class="history-list"></div></section>
+    </div>
+
+    <section class="panel timeline-panel" aria-labelledby="timeline-heading"><div class="section-heading"><div><p class="eyebrow">OBSERVABILITY WORKFLOW</p><h2 id="timeline-heading">Incident timeline</h2></div></div><p class="timeline-note"><strong>Observed by ScrapeShield</strong> is evidence from collector output. External repair is workflow context only and is not claimed as completed.</p><ol id="timeline-list" class="timeline-list"></ol></section>
+    <footer>ScrapeShield monitors structured collector output. Bright Data Scraper Studio performs scraping and any collector repair outside this dashboard.</footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
 </html>

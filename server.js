@@ -177,17 +177,17 @@ async function runCollector() {
   if (!product || typeof product !== 'object' || Array.isArray(product)) throw new Error('Bright Data CLI returned no usable product result.');
   return product;
 }
-function responseData(history, extra = {}) { return { history: history.events, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), collectorId: CONFIG.collectorId, ...extra }; }
+function responseData(history, extra = {}) { return { history: history.events, runHistory: history.runs, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), collectorId: CONFIG.collectorId, ...extra }; }
 
 app.get('/api/dashboard', async (req, res) => {
   const demoMode = typeof req.query.demo === 'string' ? req.query.demo : null; const timestamp = new Date().toISOString();
   if (demoMode && DEMO_MODES.has(demoMode)) {
     const history = await readHistory();
     try {
-      if (demoMode === 'failed') return res.json(responseData(history, { status: 'failed', product: null, missingFields: CONFIG.requiredFields, fieldDiagnostics: [], drift: [], recoveryEvent: null, checkedAt: timestamp, demo: demoMode, error: 'Demo Mode: simulated collector failure.' }));
+      if (demoMode === 'failed') return res.json(responseData(history, { status: 'failed', product: null, missingFields: CONFIG.requiredFields, fieldDiagnostics: [], healthScore: 0, usableFieldCount: 0, monitoredFieldCount: CONFIG.requiredFields.length, drift: [], recoveryEvent: null, checkedAt: timestamp, demo: demoMode, error: 'Demo Mode: simulated collector failure.' }));
       const product = JSON.parse(await fs.readFile(CONFIG.demoProductFile, 'utf8')); if (demoMode === 'degraded') product.price = null;
-      const validation = validateProduct(product);
-      return res.json(responseData(history, { status: validation.status, product, missingFields: validation.missingFields, fieldDiagnostics: validation.fieldObservations, drift: [], recoveryEvent: null, checkedAt: timestamp, demo: demoMode }));
+      const validation = validateProduct(product); const usableFieldCount = validation.fieldObservations.filter((field) => field.usable).length;
+      return res.json(responseData(history, { status: validation.status, product, missingFields: validation.missingFields, fieldDiagnostics: validation.fieldObservations, healthScore: Math.round((usableFieldCount / CONFIG.requiredFields.length) * 100), usableFieldCount, monitoredFieldCount: CONFIG.requiredFields.length, drift: [], recoveryEvent: null, checkedAt: timestamp, demo: demoMode }));
     } catch (error) { console.error('Demo dashboard run failed:', error.message); return res.status(500).json(responseData(history, { status: 'failed', product: null, missingFields: CONFIG.requiredFields, fieldDiagnostics: [], drift: [], recoveryEvent: null, checkedAt: timestamp, demo: demoMode, error: 'Demo fixture could not be loaded.' })); }
   }
   const history = await readHistory(); const previousRun = previousLiveRun(history);

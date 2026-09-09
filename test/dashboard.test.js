@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { app } = require('../server.js');
 const {
   CONFIG, SCHEMA_VERSION, isUsablePrice, validateProduct, observeField,
   detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory,
@@ -116,4 +117,21 @@ test('malformed history normalizes without crashing', () => {
   const history = normalizeHistory('{not-json');
   assert.deepEqual(history.runs, []);
   assert.deepEqual(history.events, []);
+});
+
+test('demo dashboard endpoints expose canonical scores and usable counts', async (t) => {
+  const server = app.listen(0);
+  t.after(() => server.close());
+  const { port } = server.address();
+  for (const [mode, expectedStatus, expectedScore, expectedUsable] of [['healthy', 'healthy', 100, 5], ['degraded', 'degraded', 80, 4], ['failed', 'failed', 0, 0]]) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/dashboard?demo=${mode}`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.status, expectedStatus);
+    assert.equal(body.demo, mode);
+    assert.ok(Array.isArray(body.fieldDiagnostics));
+    assert.ok(Array.isArray(body.runHistory));
+    assert.equal(body.healthScore, expectedScore);
+    assert.equal(body.usableFieldCount, expectedUsable);
+  }
 });

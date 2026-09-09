@@ -5,7 +5,8 @@
   "description": "A small web-data reliability dashboard for a Bright Data Scraper Studio collector.",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:browser": "node --test test/browser.test.js"
   },
   "engines": {
     "node": ">=18"
