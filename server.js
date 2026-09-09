@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const execFileAsync = promisify(execFile);
 const SCHEMA_VERSION = 2;
+const MIN_FIELD_RELIABILITY_OBSERVATIONS = 3;
 
 const CONFIG = {
   collectorId: process.env.BRIGHT_DATA_COLLECTOR_ID || 'c_msx09cv3945korq8v',
@@ -180,6 +181,31 @@ function deriveIncidents(runHistory = [], existingRecoveryEvents = []) {
   if (active) closeIncident();
   return incidents.map(({ signature, recurrenceKey, ...incident }) => incident);
 }
+function deriveFieldReliability(runHistory = []) {
+  const counts = new Map();
+  runHistory.forEach((run) => {
+    const seen = new Set();
+    (Array.isArray(run?.fieldObservations) ? run.fieldObservations : []).forEach((observation) => {
+      if (!observation || typeof observation.field !== 'string' || seen.has(observation.field)) return;
+      seen.add(observation.field);
+      const entry = counts.get(observation.field) || { field: observation.field, observedCount: 0, usableCount: 0, degradedCount: 0 };
+      entry.observedCount += 1;
+      if (observation.usable === true) entry.usableCount += 1;
+      else entry.degradedCount += 1;
+      counts.set(observation.field, entry);
+    });
+  });
+  return [...counts.values()].map((entry) => ({
+    ...entry,
+    reliability: entry.observedCount >= MIN_FIELD_RELIABILITY_OBSERVATIONS ? Math.round((entry.usableCount / entry.observedCount) * 100) : null,
+    sufficientEvidence: entry.observedCount >= MIN_FIELD_RELIABILITY_OBSERVATIONS,
+  })).sort((a, b) => {
+    if (a.sufficientEvidence !== b.sufficientEvidence) return a.sufficientEvidence ? -1 : 1;
+    if (a.reliability !== b.reliability) return (a.reliability ?? Infinity) - (b.reliability ?? Infinity);
+    if (a.degradedCount !== b.degradedCount) return b.degradedCount - a.degradedCount;
+    return a.field.localeCompare(b.field);
+  });
+}
 function summarizeHistory(history) {
   const runs = history.runs;
   const successful = runs.filter((run) => run.status === 'healthy');
@@ -236,7 +262,7 @@ async function runCollector() {
   if (!product || typeof product !== 'object' || Array.isArray(product)) throw new Error('Bright Data CLI returned no usable product result.');
   return product;
 }
-function responseData(history, extra = {}) { return { history: history.events, runHistory: history.runs, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), incidents: deriveIncidents(history.runs, history.events), collectorId: CONFIG.collectorId, ...extra }; }
+function responseData(history, extra = {}) { return { history: history.events, runHistory: history.runs, latestRun: history.runs.at(-1) || null, runHistorySummary: summarizeHistory(history), fieldReliability: deriveFieldReliability(history.runs), incidents: deriveIncidents(history.runs, history.events), collectorId: CONFIG.collectorId, ...extra }; }
 
 app.get('/api/dashboard', async (req, res) => {
   const demoMode = typeof req.query.demo === 'string' ? req.query.demo : null; const timestamp = new Date().toISOString();
@@ -265,4 +291,4 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 if (require.main === module) app.listen(PORT, () => console.log(`ScrapeShield is running at http://localhost:${PORT}`));
-module.exports = { app, CONFIG, SCHEMA_VERSION, isUsable, isUsablePrice, isFieldUsable, observeField, observeProduct, validateProduct, detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory, deriveIncidents };
+module.exports = { app, CONFIG, SCHEMA_VERSION, MIN_FIELD_RELIABILITY_OBSERVATIONS, isUsable, isUsablePrice, isFieldUsable, observeField, observeProduct, validateProduct, detectDrift, createRun, normalizeHistory, detectRecovery, summarizeHistory, deriveIncidents, deriveFieldReliability };
